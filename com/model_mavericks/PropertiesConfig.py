@@ -2,7 +2,7 @@ import os
 
 from jproperties import Properties
 
-
+# class definition
 class PropertiesConfig:
     @staticmethod
     def is_running_in_colab():
