@@ -7,3 +7,5 @@ def some_function():
 if __name__ == "__main__":
     print('calling logger')
     some_function()
+
+    ##Comment
