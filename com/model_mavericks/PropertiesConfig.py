@@ -13,10 +13,10 @@ class PropertiesConfig:
 
     def __init__(self, properties_file_name="sensor-data.properties"):
         if PropertiesConfig.is_running_in_colab():
-            properties_file_name = os.path.join(os.path.dirname(__file__), 'sensor-data_collab.properties')
+            properties_file_name = os.path.join(os.path.dirname(__file__), 'config_collab.properties')
             print(f"            LOADING PROPERTIES {properties_file_name} FROM COLLAB ENVIRONMENT")
         else:
-            properties_file_name = os.path.join(os.path.dirname(__file__), 'sensor-data.properties')
+            properties_file_name = os.path.join(os.path.dirname(__file__), 'config.properties')
             print(f"            LOADING PROPERTIES {properties_file_name} FROM LOCAL ENVIRONMENT")
 
         configs = Properties()
