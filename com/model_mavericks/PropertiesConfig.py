@@ -10,7 +10,7 @@ class PropertiesConfig:
         Determines if the code is running in Google Colab.
         """
         return "COLAB_GPU" in os.environ or "COLAB_BACKEND_VERSION" in os.environ
-
+#test comment
     def __init__(self, properties_file_name="sensor-data.properties"):
         if PropertiesConfig.is_running_in_colab():
             properties_file_name = os.path.join(os.path.dirname(__file__), 'config_collab.properties')
