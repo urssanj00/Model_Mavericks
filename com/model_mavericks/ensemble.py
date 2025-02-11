@@ -20,7 +20,7 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 logger.info(f'Train / Test Dataset scaled')
 
-# Define individual models
+# Define individual models test
 rf_clf = RandomForestClassifier(n_estimators=100, random_state=42)
 logger.info(f'RandomForestClassifier {rf_clf}')
 
