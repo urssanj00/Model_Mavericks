@@ -2,6 +2,7 @@ import os
 
 from jproperties import Properties
 
+
 # class definition
 class PropertiesConfig:
     @staticmethod
@@ -10,7 +11,8 @@ class PropertiesConfig:
         Determines if the code is running in Google Colab.
         """
         return "COLAB_GPU" in os.environ or "COLAB_BACKEND_VERSION" in os.environ
-#test comment
+
+    #test comment
     def __init__(self, properties_file_name="sensor-data.properties"):
         if PropertiesConfig.is_running_in_colab():
             properties_file_name = os.path.join(os.path.dirname(__file__), 'config_collab.properties')
@@ -23,7 +25,6 @@ class PropertiesConfig:
         with open(properties_file_name, 'rb') as read_prop:
             configs.load(read_prop)
         self.propertiesConfig = configs.items()
-
 
     def get_properties_config(self):
         properties_dict = {}
