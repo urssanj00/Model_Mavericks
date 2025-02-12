@@ -11,7 +11,12 @@ from sklearn.tree import DecisionTreeClassifier
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from logger_config import logger
-
+import argparse
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+import os
 # Argument parser to determine where the script is running
 # send arg from command line to identify if the file is run from local or docker
 parser = argparse.ArgumentParser(description="Run MNIST Model Tuning with MLflow.")
@@ -35,80 +40,177 @@ class MNISTModelTuning:
         self.dt_model = DecisionTreeClassifier(random_state=100)
         self.grid_search = None
         self.best_model = None
+        self.best_rf = None
+        self.best_knn = None
+        self.best_dt = None
+        self.best_models = []
+        self.ensemble_clf = None
+        self.MLFLOW = mlflow
+
+    import numpy as np
 
     def load_and_preprocess_data(self):
+        #load only 1000 images
+        logger.info("MNIST Data loading start")
+
+        # Load MNIST dataset
+        (X_train, y_train), (X_test, y_test) = mnist.load_data()
+
+        # Normalize & reshape data
+        self.X_train = X_train.reshape(-1, 28 * 28) / 255.0
+        self.y_train = y_train
+
+        # Take only a subset of 1000 test samples
+        test_subset_size = 10
+        indices = np.random.choice(len(X_test), test_subset_size, replace=False)  # Randomly select 1000 indices
+
+        self.X_test = X_test[indices].reshape(-1, 28 * 28) / 255.0
+        self.y_test = y_test[indices]
+
+        logger.info(f"MNIST Data loaded: Train={self.X_train.shape}, Test={self.X_test.shape}")
+
+
+    def load_and_preprocess_data_all(self):
+        logger.info("MNIST Data loading start")
         (X_train, y_train), (X_test, y_test) = mnist.load_data()
         self.X_train = X_train.reshape(-1, 28 * 28) / 255.0
         self.X_test = X_test.reshape(-1, 28 * 28) / 255.0
         self.y_train, self.y_test = y_train, y_test
-        logger.info("Data loaded and preprocessed successfully.")
+        logger.info("MNIST Data loaded and preprocessed successfully.")
 
     def run_gridsearch(self):
-        param_grid = {
-            'n_estimators': [50, 100, 150],
-            'max_depth': [None, 10, 20],
-            'min_samples_split': [2, 5, 10]
+        logger.info("03.01 Running GridSearchCV for all models")
+
+        # Define hyperparameter grids
+        param_grids = {
+            "Random Forest": {
+                'n_estimators': [50, 100, 150],
+                'max_depth': [None, 10, 20],
+                'min_samples_split': [2, 5, 10]
+            },
+            "KNN": {
+                'n_neighbors': [3, 5, 7, 9],
+                'weights': ['uniform', 'distance'],
+                'metric': ['euclidean', 'manhattan']
+            },
+            "Decision Tree": {
+                'criterion': ['gini', 'entropy'],
+                'max_depth': [None, 10, 20, 30],
+                'min_samples_split': [2, 5, 10]
+            }
         }
 
-        self.grid_search = GridSearchCV(
-            estimator=self.rf_model, param_grid=param_grid,
-            scoring='accuracy', cv=5, n_jobs=-1, verbose=1
+        models = {
+            "Random Forest": self.rf_model,
+            "KNN": self.knn_model,
+            "Decision Tree": self.dt_model
+        }
+
+        self.best_models = {}
+
+        # Run GridSearchCV for each model
+        for model_name, model in models.items():
+            logger.info(f"Running GridSearchCV for {model_name}")
+            grid_search = GridSearchCV(
+                estimator=model, param_grid=param_grids[model_name],
+                scoring='accuracy', cv=5, n_jobs=-1, verbose=1
+            )
+            logger.info(f"        GridSearchCV.fit for {model_name}")
+            grid_search.fit(self.X_train, self.y_train)
+            self.best_models[model_name] = grid_search.best_estimator_
+            logger.info(f"        GridSearchCV.fit for {model_name}")
+            logger.info(f"Best Parameters for {model_name}: {grid_search.best_params_}")
+
+            # Get predictions from best model
+            y_pred = self.best_models[model_name].predict(self.X_test)
+
+            # Compute evaluation metrics
+            metrics = {
+                "accuracy": accuracy_score(self.y_test, y_pred),
+                "precision": precision_score(self.y_test, y_pred, average="weighted"),
+                "recall": recall_score(self.y_test, y_pred, average="weighted"),
+                "f1_score": f1_score(self.y_test, y_pred, average="weighted")
+            }
+
+            logger.info(f"{model_name} Metrics: {metrics}")
+
+            # Log into MLflow
+            self.log_into_mlflow(model_name, param_grids[model_name], metrics, self.best_models[model_name])
+
+        # Create ensemble model with VotingClassifier
+        self.ensemble_clf = VotingClassifier(
+            estimators=[
+                ('rf', self.best_models["Random Forest"]),
+                ('knn', self.best_models["KNN"]),
+                ('dt', self.best_models["Decision Tree"])
+            ],
+            voting='hard'  # Majority voting
         )
 
-        self.grid_search.fit(self.X_train, self.y_train)
-        self.best_model = self.grid_search.best_estimator_
-        logger.info(f"Best Parameters: {self.grid_search.best_params_}")
+        logger.info(f'VotingClassifier initialized: {self.ensemble_clf}')
 
-    def evaluate_models(self):
-        models = {
-            'Random Forest': self.best_model,
-            'KNN': self.knn_model.fit(self.X_train, self.y_train),
-            'Decision Tree': self.dt_model.fit(self.X_train, self.y_train)
+        # Train ensemble model
+        self.ensemble_clf.fit(self.X_train, self.y_train)
+        logger.info(f'VotingClassifier trained successfully')
+
+        # Evaluate ensemble model
+        y_pred_ensemble = self.ensemble_clf.predict(self.X_test)
+
+        ensemble_metrics = {
+            "accuracy": accuracy_score(self.y_test, y_pred_ensemble),
+            "precision": precision_score(self.y_test, y_pred_ensemble, average="weighted"),
+            "recall": recall_score(self.y_test, y_pred_ensemble, average="weighted"),
+            "f1_score": f1_score(self.y_test, y_pred_ensemble, average="weighted")
         }
 
-        for name, model in models.items():
-            predictions = model.predict(self.X_test)
-            accuracy = accuracy_score(self.y_test, predictions)
-            logger.info(f"{name} Accuracy: {accuracy:.4f}")
-            logger.info(classification_report(self.y_test, predictions))
+        logger.info(f"VotingClassifier Metrics: {ensemble_metrics}")
 
-    def train_cnn(self):
-        cnn_model = Sequential([
-            Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
-            MaxPooling2D((2, 2)),
-            Flatten(),
-            Dense(128, activation='relu'),
-            Dense(10, activation='softmax')
-        ])
+        # Log ensemble model into MLflow
+        self.log_into_mlflow("VotingClassifier", {}, ensemble_metrics, self.ensemble_clf)
 
-        cnn_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        cnn_model.fit(self.X_train.reshape(-1, 28, 28, 1), self.y_train, epochs=5, batch_size=32, validation_split=0.2)
 
-        cnn_accuracy = cnn_model.evaluate(self.X_test.reshape(-1, 28, 28, 1), self.y_test, verbose=0)[1]
-        logger.info(f"CNN Accuracy: {cnn_accuracy:.4f}")
-        return cnn_model
+
+
+    def log_into_mlflow(self, model_name, param_grid, metrics, model):
+        """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
+        with mlflow.start_run(run_name=model_name):
+            # Log hyperparameters
+            mlflow.log_params(param_grid)
+
+            # Log evaluation metrics
+            for key, value in metrics.items():
+                mlflow.log_metric(key, value)
+
+            # Log the trained model
+            mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
+            logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
+
 
     def track_experiment(self):
         mlflow.set_experiment("MNIST_Model_Tuning")
+        logger.info("00. MNIST_Model_Tuning Experiment Started")
         with mlflow.start_run():
+            logger.info("01. Load and Preprocess Data")
             self.load_and_preprocess_data()
-            mlflow.log_params({
-                "n_estimators_range": [50, 100, 150],
-                "max_depth_range": [None, 10, 20],
-                "min_samples_split_range": [2, 5, 10]
-            })
+            logger.info("02. Log Params in MLFLOW")
+            logger.info("03. Do GridSearch")
             self.run_gridsearch()
-            mlflow.log_params(self.grid_search.best_params_)
-            mlflow.log_metric("best_cv_accuracy", self.grid_search.best_score_)
+            logger.info(f"04. Log self.grid_search.best_params_ {self.grid_search.best_params_} Params in MLFLOW")
 
-            self.evaluate_models()
-            test_accuracy = accuracy_score(self.y_test, self.best_model.predict(self.X_test))
-            mlflow.log_metric("test_accuracy", test_accuracy)
+    #        mlflow.log_params(self.grid_search.best_params_)
+    #        logger.info(f"05. Log best_cv_accuracy in MLFLOW")
+    #        mlflow.log_metric("best_cv_accuracy", self.grid_search.best_score_)
 
-            mlflow.sklearn.log_model(self.best_model, "best_random_forest_model")
+            #test_accuracy = accuracy_score(self.y_test, self.best_model.predict(self.X_test))
+            #logger.info(f"08. test_accuracy {test_accuracy}")
+            #logger.info(f"09. Log test_accuracy {test_accuracy} in MLFLOW")
+            #for accuracy in accuracy_list:
+            #    mlflow.log_metric("test_accuracy", accuracy)
 
-            cnn_model = self.train_cnn()
-            mlflow.keras.log_model(cnn_model, "cnn_model")
+
+            #logger.info(f"10. Log best_model {self.best_model} in MLFLOW")
+
+
 
 
 if __name__ == "__main__":
