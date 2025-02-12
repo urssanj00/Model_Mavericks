@@ -10,6 +10,20 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from logger_config import logger
+
+# Argument parser to determine where the script is running
+parser = argparse.ArgumentParser(description="Run MNIST Model Tuning with MLflow.")
+parser.add_argument("--docker", action="store_true", help="Indicate if running inside a Docker container.")
+args = parser.parse_args()
+
+# Set MLflow Tracking URI based on the environment
+if args.docker:
+    mlflow.set_tracking_uri("http://mlflow:5000")  # Docker container
+    logger.info("Running inside Docker. Using MLflow at http://mlflow:5000")
+else:
+    mlflow.set_tracking_uri("http://localhost:5000")  # Local machine
+    logger.info("Running locally. Using MLflow at http://localhost:5000")
 
 
 class MNISTModelTuning:
@@ -26,7 +40,7 @@ class MNISTModelTuning:
         self.X_train = X_train.reshape(-1, 28 * 28) / 255.0
         self.X_test = X_test.reshape(-1, 28 * 28) / 255.0
         self.y_train, self.y_test = y_train, y_test
-        print("Data loaded and preprocessed successfully.")
+        logger.info("Data loaded and preprocessed successfully.")
 
     def run_gridsearch(self):
         param_grid = {
@@ -42,7 +56,7 @@ class MNISTModelTuning:
 
         self.grid_search.fit(self.X_train, self.y_train)
         self.best_model = self.grid_search.best_estimator_
-        print(f"Best Parameters: {self.grid_search.best_params_}")
+        logger.info(f"Best Parameters: {self.grid_search.best_params_}")
 
     def evaluate_models(self):
         models = {
@@ -54,8 +68,8 @@ class MNISTModelTuning:
         for name, model in models.items():
             predictions = model.predict(self.X_test)
             accuracy = accuracy_score(self.y_test, predictions)
-            print(f"{name} Accuracy: {accuracy:.4f}")
-            print(classification_report(self.y_test, predictions))
+            logger.info(f"{name} Accuracy: {accuracy:.4f}")
+            logger.info(classification_report(self.y_test, predictions))
 
     def train_cnn(self):
         cnn_model = Sequential([
@@ -70,7 +84,7 @@ class MNISTModelTuning:
         cnn_model.fit(self.X_train.reshape(-1, 28, 28, 1), self.y_train, epochs=5, batch_size=32, validation_split=0.2)
 
         cnn_accuracy = cnn_model.evaluate(self.X_test.reshape(-1, 28, 28, 1), self.y_test, verbose=0)[1]
-        print(f"CNN Accuracy: {cnn_accuracy:.4f}")
+        logger.info(f"CNN Accuracy: {cnn_accuracy:.4f}")
         return cnn_model
 
     def track_experiment(self):
