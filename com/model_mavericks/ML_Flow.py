@@ -95,18 +95,18 @@ class MNISTModelTuning:
                 'n_neighbors': [3, 5, 7, 9],
                 'weights': ['uniform', 'distance'],
                 'metric': ['euclidean', 'manhattan']
-            },
-            "Decision Tree": {
-                'criterion': ['gini', 'entropy'],
-                'max_depth': [None, 10, 20, 30],
-                'min_samples_split': [2, 5, 10]
-            }
+            }#,
+            #"Decision Tree": {
+            #    'criterion': ['gini', 'entropy'],
+            #    'max_depth': [None, 10, 20, 30],
+            #    'min_samples_split': [2, 5, 10]
+            #}
         }
 
         models = {
             "Random Forest": self.rf_model,
-            "KNN": self.knn_model,
-            "Decision Tree": self.dt_model
+            "KNN": self.knn_model#,
+            #"Decision Tree": self.dt_model
         }
 
         self.best_models = {}
@@ -139,13 +139,14 @@ class MNISTModelTuning:
 
             # Log into MLflow
             self.log_into_mlflow(model_name, param_grids[model_name], metrics, self.best_models[model_name])
+            logger.info(f"{model_name} mlflow push completed")
 
         # Create ensemble model with VotingClassifier
         self.ensemble_clf = VotingClassifier(
             estimators=[
                 ('rf', self.best_models["Random Forest"]),
-                ('knn', self.best_models["KNN"]),
-                ('dt', self.best_models["Decision Tree"])
+                ('knn', self.best_models["KNN"])#,
+                #('dt', self.best_models["Decision Tree"])
             ],
             voting='hard'  # Majority voting
         )
@@ -171,19 +172,59 @@ class MNISTModelTuning:
         # Log ensemble model into MLflow
         self.log_into_mlflow("VotingClassifier", {}, ensemble_metrics, self.ensemble_clf)
 
+    def log_into_mlflow_bak(self, model_name, param_grid, metrics, model):
+        """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
 
+        with mlflow.start_run(run_name=model_name):
+            # Flatten parameter grid before logging
+            flat_params = {}
+            for param, values in param_grid.items():
+                if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
+                    flat_params[param] = str(values)
+                else:
+                    flat_params[param] = values
 
+            logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
+            mlflow.log_params(flat_params)
+
+            logger.info(f"1. mlflow metrics {metrics}")
+
+            # Log evaluation metrics
+            for key, value in metrics.items():
+                logger.info(f"2. mlflow metric {key} : {value}")
+                mlflow.log_metric(key, value)
+
+            # Log the trained model
+            logger.info(f"3. mlflow log_model {model_name} : {model}")
+
+            mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
+            logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
 
     def log_into_mlflow(self, model_name, param_grid, metrics, model):
         """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
         # Log hyperparameters
-        mlflow.log_params(param_grid)
+        logger.info(f"0. mlflow param_grid {param_grid}")
+        #mlflow.log_params(param_grid)
+        flat_params = {}
+        for param, values in param_grid.items():
+            if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
+                flat_params[param] = str(values)
+            else:
+                flat_params[param] = values
+
+        logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
+        mlflow.log_params(flat_params)
+
+        logger.info(f"1. mlflow metrics {metrics}")
 
         # Log evaluation metrics
         for key, value in metrics.items():
+            logger.info(f"2. mlflow param_grid {key} : {value}")
             mlflow.log_metric(key, value)
 
         # Log the trained model
+        logger.info(f"3. mlflow log_model {model_name} : {model}")
+
         mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
         logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
 
@@ -197,7 +238,7 @@ class MNISTModelTuning:
             logger.info("02. Log Params in MLFLOW")
             logger.info("03. Do GridSearch")
             self.run_gridsearch()
-            logger.info(f"04. Log self.grid_search.best_params_ {self.grid_search.best_params_} Params in MLFLOW")
+        #    logger.info(f"04. Log self.grid_search.best_params_ {self.grid_search.best_params_} Params in MLFLOW")
 
     #        mlflow.log_params(self.grid_search.best_params_)
     #        logger.info(f"05. Log best_cv_accuracy in MLFLOW")
