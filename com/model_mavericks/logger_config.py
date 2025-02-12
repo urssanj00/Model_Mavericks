@@ -10,7 +10,7 @@ logging.basicConfig(
     format="{asctime}-{levelname}-{message}",
     datefmt="%Y-%m-%d %H:%M",
     style="{",
-    level = logging.INFO  # Set the logger level to DEBUG
+    level = logging.DEBUG  # Set the logger level to DEBUG
 )
 
 logger = logging.getLogger()
