@@ -1,0 +1,6 @@
+mlflow
+tensorflow
+scikit-learn
+numpy
+pandas
+jproperties

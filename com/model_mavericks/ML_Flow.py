@@ -11,6 +11,7 @@ from sklearn.tree import DecisionTreeClassifier
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from logger_config import logger
+import argparse
 
 # Argument parser to determine where the script is running
 # send arg from command line to identify if the file is run from local or docker
