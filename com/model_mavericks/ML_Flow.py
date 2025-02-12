@@ -57,15 +57,18 @@ class MNISTModelTuning:
         (X_train, y_train), (X_test, y_test) = mnist.load_data()
 
         # Normalize & reshape data
-        self.X_train = X_train.reshape(-1, 28 * 28) / 255.0
+        self.X_train = X_train.reshape(-1, 784) / 255.0
         self.y_train = y_train
 
-        # Take only a subset of 1000 test samples
-        test_subset_size = 10
-        indices = np.random.choice(len(X_test), test_subset_size, replace=False)  # Randomly select 1000 indices
+        self.X_test = X_test.reshape(-1, 784) / 255.0
+        self.y_test = y_test
 
-        self.X_test = X_test[indices].reshape(-1, 28 * 28) / 255.0
-        self.y_test = y_test[indices]
+        # Take only a subset of 1000 test samples
+        test_subset_size = 1000
+        indices = np.random.choice(len(self.X_train), test_subset_size, replace=False)  # Randomly select 1000 indices
+
+        self.X_train = self.X_train[indices]
+        self.y_train = self.y_train[indices]
 
         logger.info(f"MNIST Data loaded: Train={self.X_train.shape}, Test={self.X_test.shape}")
 
@@ -173,17 +176,16 @@ class MNISTModelTuning:
 
     def log_into_mlflow(self, model_name, param_grid, metrics, model):
         """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
-        with mlflow.start_run(run_name=model_name):
-            # Log hyperparameters
-            mlflow.log_params(param_grid)
+        # Log hyperparameters
+        mlflow.log_params(param_grid)
 
-            # Log evaluation metrics
-            for key, value in metrics.items():
-                mlflow.log_metric(key, value)
+        # Log evaluation metrics
+        for key, value in metrics.items():
+            mlflow.log_metric(key, value)
 
-            # Log the trained model
-            mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
-            logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
+        # Log the trained model
+        mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
+        logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
 
 
     def track_experiment(self):
