@@ -95,8 +95,8 @@ class MNISTModelTuning:
                 'n_neighbors': [3, 5, 7, 9],
                 'weights': ['uniform', 'distance'],
                 'metric': ['euclidean', 'manhattan']
-            }#,
-            #"Decision Tree": {
+            }#,Will Check later
+            #"Decision Tree" will : {
             #    'criterion': ['gini', 'entropy'],
             #    'max_depth': [None, 10, 20, 30],
             #    'min_samples_split': [2, 5, 10]
