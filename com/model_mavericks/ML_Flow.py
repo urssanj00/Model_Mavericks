@@ -13,6 +13,7 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from logger_config import logger
 
 # Argument parser to determine where the script is running
+# send arg from command line to identify if the file is run from local or docker
 parser = argparse.ArgumentParser(description="Run MNIST Model Tuning with MLflow.")
 parser.add_argument("--docker", action="store_true", help="Indicate if running inside a Docker container.")
 args = parser.parse_args()
