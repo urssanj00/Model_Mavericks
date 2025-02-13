@@ -218,19 +218,18 @@ class MNISTModelTuning:
                 else:
                     flat_params[param] = values
             logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
-            for key, value in flat_params.items():
-                logger.info(f"Logging in mlflow {model_name} {key}:{value}")
-                mlflow.log_param(key, value)  # Log individually instead of mlflow.log_params(flat_params)
+            #for key, value in flat_params.items():
+             #   logger.info(f"Logging in mlflow {model_name} {key}:{value}")
+              #  mlflow.log_param(key, value)  # Log individually instead of mlflow.log_params(flat_params)
 
-
-    #        mlflow.log_params(flat_params)
+            mlflow.log_params(flat_params)
 
             logger.info(f"1. mlflow metrics {metrics}")
 
             # Log evaluation metrics
-            for key, value in metrics.items():
-                logger.info(f"2. mlflow param_grid {key} : {value}")
-                mlflow.log_metric(key, value)
+            #for key, value in metrics.items():
+             #   logger.info(f"2. mlflow param_grid {key} : {value}")
+              #  mlflow.log_metric(key, value)
 
             # Log the trained model
             logger.info(f"3. mlflow log_model {model_name} : {model}")

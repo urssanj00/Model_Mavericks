@@ -57,7 +57,7 @@ def predict():
 
 # Prediction endpoint
 @app.route("/test_data", methods=["POST"])
-def predict():
+def test_data():
     data = request.get_json()
     logger.info(f"predict -data {data}")
 
