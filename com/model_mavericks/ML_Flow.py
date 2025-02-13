@@ -13,6 +13,7 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from logger_config import logger
 import argparse
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
@@ -64,7 +65,7 @@ class MNISTModelTuning:
         self.y_test = y_test
 
         # Take only a subset of 1000 test samples
-        test_subset_size = 1000
+        test_subset_size = 10000
         indices = np.random.choice(len(self.X_train), test_subset_size, replace=False)  # Randomly select 1000 indices
 
         self.X_train = self.X_train[indices]
@@ -95,18 +96,19 @@ class MNISTModelTuning:
                 'n_neighbors': [3, 5, 7, 9],
                 'weights': ['uniform', 'distance'],
                 'metric': ['euclidean', 'manhattan']
-            }#,Will Check later
-            #"Decision Tree" will : {
-            #    'criterion': ['gini', 'entropy'],
-            #    'max_depth': [None, 10, 20, 30],
-            #    'min_samples_split': [2, 5, 10]
-            #}
+            },#Will Check later
+            "Decision Tree": {
+                'criterion': ['gini', 'entropy'],
+                #'max_depth': [None, 10, 20, 30],
+                'max_depth': [10, 20, 30],
+                'min_samples_split': [2, 5, 10]
+            }
         }
 
         models = {
             "Random Forest": self.rf_model,
-            "KNN": self.knn_model#,
-            #"Decision Tree": self.dt_model
+            "KNN": self.knn_model,
+            "Decision Tree": self.dt_model
         }
 
         self.best_models = {}
@@ -145,8 +147,8 @@ class MNISTModelTuning:
         self.ensemble_clf = VotingClassifier(
             estimators=[
                 ('rf', self.best_models["Random Forest"]),
-                ('knn', self.best_models["KNN"])#,
-                #('dt', self.best_models["Decision Tree"])
+                ('knn', self.best_models["KNN"]),
+                ('dt', self.best_models["Decision Tree"])
             ],
             voting='hard'  # Majority voting
         )
@@ -180,12 +182,15 @@ class MNISTModelTuning:
             flat_params = {}
             for param, values in param_grid.items():
                 if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
-                    flat_params[param] = str(values)
+                    flat_params[param] = values
                 else:
                     flat_params[param] = values
-
             logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
-            mlflow.log_params(flat_params)
+            for key, value in flat_params.items():
+                mlflow.log_param(key, value)  # Log individually instead of mlflow.log_params(flat_params)
+
+
+            #mlflow.log_params(flat_params)
 
             logger.info(f"1. mlflow metrics {metrics}")
 
@@ -203,59 +208,73 @@ class MNISTModelTuning:
     def log_into_mlflow(self, model_name, param_grid, metrics, model):
         """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
         # Log hyperparameters
-        logger.info(f"0. mlflow param_grid {param_grid}")
-        #mlflow.log_params(param_grid)
-        flat_params = {}
-        for param, values in param_grid.items():
-            if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
-                flat_params[param] = str(values)
-            else:
-                flat_params[param] = values
-
-        logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
-        mlflow.log_params(flat_params)
-
-        logger.info(f"1. mlflow metrics {metrics}")
-
-        # Log evaluation metrics
-        for key, value in metrics.items():
-            logger.info(f"2. mlflow param_grid {key} : {value}")
-            mlflow.log_metric(key, value)
-
-        # Log the trained model
-        logger.info(f"3. mlflow log_model {model_name} : {model}")
-
-        mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
-        logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
+        with mlflow.start_run():
+            logger.info(f"0. mlflow param_grid {param_grid}")
+            #mlflow.log_params(param_grid)
+            flat_params = {}
+            for param, values in param_grid.items():
+                if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
+                    flat_params[param] = str(values)
+                else:
+                    flat_params[param] = values
+            logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
+            for key, value in flat_params.items():
+                logger.info(f"Logging in mlflow {model_name} {key}:{value}")
+                mlflow.log_param(key, value)  # Log individually instead of mlflow.log_params(flat_params)
 
 
+    #        mlflow.log_params(flat_params)
+
+            logger.info(f"1. mlflow metrics {metrics}")
+
+            # Log evaluation metrics
+            for key, value in metrics.items():
+                logger.info(f"2. mlflow param_grid {key} : {value}")
+                mlflow.log_metric(key, value)
+
+            # Log the trained model
+            logger.info(f"3. mlflow log_model {model_name} : {model}")
+
+            mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
+            logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
+
+
+    def save_best_models(self):
+        """Saves the best models locally."""
+        save_dir = "best_models"
+        os.makedirs(save_dir, exist_ok=True)
+        logger.info(f"Saving Best Models")
+        for model_name, model in self.best_models.items():
+            model_path = os.path.join(save_dir, f"{model_name.replace(' ', '_')}.joblib")
+            logger.info(f"Model Path {model_path}")
+            joblib.dump(model, model_path)
+            logger.info(f"Saved Best Model:{model_name} model at {model_path}")
+            mlflow.log_artifact(model_path)
+        
+        # Save the ensemble model
+        ensemble_path = os.path.join(save_dir, "VotingClassifier.joblib")
+        logger.info(f"ensemble_path Model Path {ensemble_path}")
+
+        joblib.dump(self.ensemble_clf, ensemble_path)
+        logger.info(f"Saved ensemble model at {ensemble_path}")
+        mlflow.log_artifact(ensemble_path)
+    
     def track_experiment(self):
         mlflow.set_experiment("MNIST_Model_Tuning")
         logger.info("00. MNIST_Model_Tuning Experiment Started")
-        with mlflow.start_run():
-            logger.info("01. Load and Preprocess Data")
-            self.load_and_preprocess_data()
-            logger.info("02. Log Params in MLFLOW")
-            logger.info("03. Do GridSearch")
-            self.run_gridsearch()
-        #    logger.info(f"04. Log self.grid_search.best_params_ {self.grid_search.best_params_} Params in MLFLOW")
 
-    #        mlflow.log_params(self.grid_search.best_params_)
-    #        logger.info(f"05. Log best_cv_accuracy in MLFLOW")
-    #        mlflow.log_metric("best_cv_accuracy", self.grid_search.best_score_)
-
-            #test_accuracy = accuracy_score(self.y_test, self.best_model.predict(self.X_test))
-            #logger.info(f"08. test_accuracy {test_accuracy}")
-            #logger.info(f"09. Log test_accuracy {test_accuracy} in MLFLOW")
-            #for accuracy in accuracy_list:
-            #    mlflow.log_metric("test_accuracy", accuracy)
-
+        logger.info("01. Load and Preprocess Data")
+        self.load_and_preprocess_data()
+        logger.info("02. Run GridSearch")
+        self.run_gridsearch()
+        logger.info("03. Save Best Models")
+        self.save_best_models()
 
             #logger.info(f"10. Log best_model {self.best_model} in MLFLOW")
 
 
 
 
-if __name__ == "__main__":
-    mnist_tuning = MNISTModelTuning()
-    mnist_tuning.track_experiment()
+#if __name__ == "__main__":
+#    mnist_tuning = MNISTModelTuning()
+#    mnist_tuning.track_experiment()
