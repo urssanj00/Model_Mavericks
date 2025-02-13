@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import os
+import psutil
 # Argument parser to determine where the script is running
 # send arg from command line to identify if the file is run from local or docker
 parser = argparse.ArgumentParser(description="Run MNIST Model Tuning with MLflow.")
@@ -52,10 +53,11 @@ class MNISTModelTuning:
 
     def load_and_preprocess_data(self):
         #load only 1000 images
-        logger.info("MNIST Data loading start")
+        logger.info("01.Aa MNIST Data loading start")
 
         # Load MNIST dataset
         (X_train, y_train), (X_test, y_test) = mnist.load_data()
+        logger.info("01.b Test and Train split")
 
         # Normalize & reshape data
         self.X_train = X_train.reshape(-1, 784) / 255.0
@@ -63,27 +65,29 @@ class MNISTModelTuning:
 
         self.X_test = X_test.reshape(-1, 784) / 255.0
         self.y_test = y_test
+        logger.info("01.c Test and Train data flatten - reshape")
 
         # Take only a subset of 1000 test samples
         test_subset_size = 10000
         indices = np.random.choice(len(self.X_train), test_subset_size, replace=False)  # Randomly select 1000 indices
+        logger.info("01.d Train data - take subset of only 10k samples")
 
         self.X_train = self.X_train[indices]
         self.y_train = self.y_train[indices]
 
-        logger.info(f"MNIST Data loaded: Train={self.X_train.shape}, Test={self.X_test.shape}")
+        logger.info(f"01.e MNIST Data loaded: Train={self.X_train.shape}, Test={self.X_test.shape}")
 
 
     def load_and_preprocess_data_all(self):
-        logger.info("MNIST Data loading start")
+        logger.info("01.a MNIST Data loading start")
         (X_train, y_train), (X_test, y_test) = mnist.load_data()
         self.X_train = X_train.reshape(-1, 28 * 28) / 255.0
         self.X_test = X_test.reshape(-1, 28 * 28) / 255.0
         self.y_train, self.y_test = y_train, y_test
-        logger.info("MNIST Data loaded and preprocessed successfully.")
+        logger.info("01.b MNIST Data loaded and preprocessed successfully.")
 
     def run_gridsearch(self):
-        logger.info("03.01 Running GridSearchCV for all models")
+        logger.info("02.a Running GridSearchCV for all models")
 
         # Define hyperparameter grids
         param_grids = {
@@ -96,38 +100,40 @@ class MNISTModelTuning:
                 'n_neighbors': [3, 5, 7, 9],
                 'weights': ['uniform', 'distance'],
                 'metric': ['euclidean', 'manhattan']
-            },#Will Check later
+            },
             "Decision Tree": {
                 'criterion': ['gini', 'entropy'],
-                #'max_depth': [None, 10, 20, 30],
-                'max_depth': [10, 20, 30],
+                'max_depth': [None, 10, 20, 30],
                 'min_samples_split': [2, 5, 10]
             }
         }
+        logger.info(f"02.b Param Grid {param_grids}")
 
         models = {
             "Random Forest": self.rf_model,
             "KNN": self.knn_model,
             "Decision Tree": self.dt_model
         }
+        logger.info(f"02.c Param Grid {models}")
 
         self.best_models = {}
 
         # Run GridSearchCV for each model
         for model_name, model in models.items():
-            logger.info(f"Running GridSearchCV for {model_name}")
+            logger.info(f"02.d Running GridSearchCV for {model_name}")
             grid_search = GridSearchCV(
                 estimator=model, param_grid=param_grids[model_name],
                 scoring='accuracy', cv=5, n_jobs=-1, verbose=1
             )
-            logger.info(f"        GridSearchCV.fit for {model_name}")
+            logger.info(f"02.e GridSearchCV.fit for {model_name}")
             grid_search.fit(self.X_train, self.y_train)
             self.best_models[model_name] = grid_search.best_estimator_
-            logger.info(f"        GridSearchCV.fit for {model_name}")
-            logger.info(f"Best Parameters for {model_name}: {grid_search.best_params_}")
+            logger.info(f"02.f GridSearchCV.fit for {model_name}")
+            logger.info(f"02.g Best Parameters for {model_name}: {grid_search.best_params_}")
 
             # Get predictions from best model
             y_pred = self.best_models[model_name].predict(self.X_test)
+            logger.info(f"02.f Prediction {model_name}: y_pred {y_pred}")
 
             # Compute evaluation metrics
             metrics = {
@@ -137,11 +143,11 @@ class MNISTModelTuning:
                 "f1_score": f1_score(self.y_test, y_pred, average="weighted")
             }
 
-            logger.info(f"{model_name} Metrics: {metrics}")
+            logger.info(f"02.g {model_name} Metrics: {metrics}")
 
             # Log into MLflow
             self.log_into_mlflow(model_name, param_grids[model_name], metrics, self.best_models[model_name])
-            logger.info(f"{model_name} mlflow push completed")
+            logger.info(f"02.f {model_name} mlflow push completed")
 
         # Create ensemble model with VotingClassifier
         self.ensemble_clf = VotingClassifier(
@@ -153,14 +159,15 @@ class MNISTModelTuning:
             voting='hard'  # Majority voting
         )
 
-        logger.info(f'VotingClassifier initialized: {self.ensemble_clf}')
+        logger.info(f'02.g VotingClassifier initialized: {self.ensemble_clf}')
 
         # Train ensemble model
         self.ensemble_clf.fit(self.X_train, self.y_train)
-        logger.info(f'VotingClassifier trained successfully')
+        logger.info(f'02.h VotingClassifier trained successfully')
 
         # Evaluate ensemble model
         y_pred_ensemble = self.ensemble_clf.predict(self.X_test)
+        logger.info(f'02.h VotingClassifier y_pred_ensemble : {y_pred_ensemble}')
 
         ensemble_metrics = {
             "accuracy": accuracy_score(self.y_test, y_pred_ensemble),
@@ -169,74 +176,74 @@ class MNISTModelTuning:
             "f1_score": f1_score(self.y_test, y_pred_ensemble, average="weighted")
         }
 
-        logger.info(f"VotingClassifier Metrics: {ensemble_metrics}")
+        logger.info(f"02.g VotingClassifier Metrics: {ensemble_metrics}")
 
         # Log ensemble model into MLflow
         self.log_into_mlflow("VotingClassifier", {}, ensemble_metrics, self.ensemble_clf)
-
-    def log_into_mlflow_bak(self, model_name, param_grid, metrics, model):
-        """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
-
-        with mlflow.start_run(run_name=model_name):
-            # Flatten parameter grid before logging
-            flat_params = {}
-            for param, values in param_grid.items():
-                if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
-                    flat_params[param] = values
-                else:
-                    flat_params[param] = values
-            logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
-            for key, value in flat_params.items():
-                mlflow.log_param(key, value)  # Log individually instead of mlflow.log_params(flat_params)
-
-
-            #mlflow.log_params(flat_params)
-
-            logger.info(f"1. mlflow metrics {metrics}")
-
-            # Log evaluation metrics
-            for key, value in metrics.items():
-                logger.info(f"2. mlflow metric {key} : {value}")
-                mlflow.log_metric(key, value)
-
-            # Log the trained model
-            logger.info(f"3. mlflow log_model {model_name} : {model}")
-
-            mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
-            logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
+        logger.info(f"02.g VotingClassifier pushed to MLFLOW")
 
     def log_into_mlflow(self, model_name, param_grid, metrics, model):
         """Logs hyperparameters, metrics, model, and artifacts (confusion matrix) into MLflow."""
         # Log hyperparameters
         with mlflow.start_run():
-            logger.info(f"0. mlflow param_grid {param_grid}")
-            #mlflow.log_params(param_grid)
+            mlflow.set_tag("model_name", model_name)
+            logger.info(f"mlflow: Started logging for model: {model_name}")
+            logger.info(f"mlflow: param_grid {param_grid}")
+            # Log hyperparameters (flatten param_grid for easier logging)
+            logger.info(f"mlflow: Logging hyperparameters for model {model_name}: {param_grid}")
+
             flat_params = {}
             for param, values in param_grid.items():
                 if isinstance(values, list):  # Convert lists to strings to avoid MLflow errors
                     flat_params[param] = str(values)
                 else:
                     flat_params[param] = values
-            logger.info(f"0. mlflow param_grid (flattened) {flat_params}")
+            logger.info(f"mlflow: Flattened hyperparameters: {flat_params}")
             #for key, value in flat_params.items():
              #   logger.info(f"Logging in mlflow {model_name} {key}:{value}")
               #  mlflow.log_param(key, value)  # Log individually instead of mlflow.log_params(flat_params)
 
             mlflow.log_params(flat_params)
 
-            logger.info(f"1. mlflow metrics {metrics}")
+            # Log metrics (e.g., accuracy, f1-score, etc.)
+            logger.info(f"mlflow:Logging metrics for {model_name}: {metrics}")
 
             # Log evaluation metrics
-            #for key, value in metrics.items():
-             #   logger.info(f"2. mlflow param_grid {key} : {value}")
-              #  mlflow.log_metric(key, value)
+            for key, value in metrics.items():
+                logger.info(f"Logging metric {key}: {value}")
+                mlflow.log_metric(key, value)
+
+                # Log system metrics (CPU usage, memory usage, etc.)
+                logger.info(f"mlflow: Logging system metrics for {model_name}")
+
+                # CPU Usage
+                cpu_percent = psutil.cpu_percent(interval=1)
+                logger.info(f"CPU usage: {cpu_percent}%")
+                mlflow.log_metric("cpu_usage_percent", cpu_percent)
+
+                # Memory Usage
+                memory_info = psutil.virtual_memory()
+                memory_used = memory_info.used / (1024 ** 3)  # Convert bytes to GB
+                memory_total = memory_info.total / (1024 ** 3)  # Convert bytes to GB
+                logger.info(f"Memory usage: {memory_used:.2f} GB used out of {memory_total:.2f} GB total")
+                mlflow.log_metric("memory_usage_gb", memory_used)
+                mlflow.log_metric("memory_total_gb", memory_total)
+
+                # Disk Usage
+                disk_info = psutil.disk_usage('/')
+                disk_used = disk_info.used / (1024 ** 3)  # Convert bytes to GB
+                disk_total = disk_info.total / (1024 ** 3)  # Convert bytes to GB
+                logger.info(f"Disk usage: {disk_used:.2f} GB used out of {disk_total:.2f} GB total")
+                mlflow.log_metric("disk_usage_gb", disk_used)
+                mlflow.log_metric("disk_total_gb", disk_total)
+
+
 
             # Log the trained model
-            logger.info(f"3. mlflow log_model {model_name} : {model}")
+            logger.info(f"mlflow: log_model {model_name} : {model}")
 
             mlflow.sklearn.log_model(model, model_name.lower().replace(" ", "_"))
-            logger.info(f"Logged {model_name} model, metrics, and confusion matrix in MLflow")
-
+            logger.info(f"mlflow: Logged {model_name} model, metrics, and confusion matrix in MLflow")
 
     def save_best_models(self):
         """Saves the best models locally."""
