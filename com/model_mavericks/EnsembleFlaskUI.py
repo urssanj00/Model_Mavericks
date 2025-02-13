@@ -55,12 +55,6 @@ def predict():
     else:
         return jsonify({"error": "Ensemble model not found"}), 500
 
-# Prediction endpoint
-@app.route("/test_data", methods=["POST"])
-def test_data():
-    data = request.get_json()
-    logger.info(f"predict -data {data}")
-
 
 if __name__ == "__main__":
     print("Flask server running at: http://127.0.0.1:5050")
