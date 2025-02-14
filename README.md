@@ -1,6 +1,8 @@
 # Model_Mavericks
 VNIT AAI Second Sem MLOPS  Assignment2
 
+pip install "Flask[async]"
+
 Running Everything
 Step 1: Build and Start Containers
 From the Model_Mavericks/ directory, run:
