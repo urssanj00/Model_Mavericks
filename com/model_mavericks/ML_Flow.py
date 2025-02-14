@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser(description="Run MNIST Model Tuning with MLflow
 parser.add_argument("--docker", action="store_true", help="Indicate if running inside a Docker container.")
 args = parser.parse_args()
 
-# Set MLflow Tracking URI based on the environment
+# Set MLflow Tracking URI based on the execuation environment
 if args.docker:
     mlflow.set_tracking_uri("http://mlflow:5000")  # Docker container
     logger.info("Running inside Docker. Using MLflow at http://mlflow:5000")
@@ -35,8 +35,14 @@ else:
 
 
 class MNISTModelTuning:
-    def __init__(self):
+    """
+    A class to load, preprocess, train, and evaluate models on the MNIST dataset.
+    Includes hyperparameter tuning using GridSearchCV and tracking with MLflow.
+    """
+    def __init__(self): #Intialize models and placeholders for training/testing data
         self.X_train, self.X_test, self.y_train, self.y_test = None, None, None, None
+
+        #Define Classifiers
         self.rf_model = RandomForestClassifier()
         self.knn_model = KNeighborsClassifier(n_neighbors=7)
         self.dt_model = DecisionTreeClassifier(random_state=100)
@@ -52,22 +58,21 @@ class MNISTModelTuning:
     import numpy as np
 
     def load_and_preprocess_data(self):
-        #load only 1000 images
+        #load and preprocess only 10000 images
         logger.info("01.Aa MNIST Data loading start")
 
-        # Load MNIST dataset
+        # Load MNIST dataset from Keras
         (X_train, y_train), (X_test, y_test) = mnist.load_data()
         logger.info("01.b Test and Train split")
 
         # Normalize & reshape data
         self.X_train = X_train.reshape(-1, 784) / 255.0
         self.y_train = y_train
-
         self.X_test = X_test.reshape(-1, 784) / 255.0
         self.y_test = y_test
         logger.info("01.c Test and Train data flatten - reshape")
 
-        # Take only a subset of 1000 test samples
+        # Take only a subset of 10000 test samples to speed up training
         test_subset_size = 10000
         indices = np.random.choice(len(self.X_train), test_subset_size, replace=False)  # Randomly select 1000 indices
         logger.info("01.d Train data - take subset of only 10k samples")
@@ -86,7 +91,7 @@ class MNISTModelTuning:
         self.y_train, self.y_test = y_train, y_test
         logger.info("01.b MNIST Data loaded and preprocessed successfully.")
 
-    def run_gridsearch(self):
+    def run_gridsearch(self): #Perform GridSearchCV for hyperparameter tuning on multiple classifier
         logger.info("02.a Running GridSearchCV for all models")
 
         # Define hyperparameter grids
@@ -108,7 +113,7 @@ class MNISTModelTuning:
             }
         }
         logger.info(f"02.b Param Grid {param_grids}")
-
+        #Mapping model names to actual models
         models = {
             "Random Forest": self.rf_model,
             "KNN": self.knn_model,
