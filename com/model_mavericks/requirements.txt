@@ -1,0 +1,15 @@
+Flask
+joblib
+numpy
+asyncio
+scikit-learn
+tensorflow
+matplotlib
+seaborn
+psutil
+mlflow
+gunicorn
+requests
+pandas
+jproperties
+flask[async]
