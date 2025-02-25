@@ -1,20 +1,28 @@
-# Use a lightweight Python image as base image
-FROM python:3.9-slim
+# Use lightweight Python image
+FROM python:3.8
 
-# Set the working directory inside the container
+# Set working directory
 WORKDIR /app
 
-# Copy all project files (to ensure all dependencies exist)
-COPY . /app
+# Use a virtual environment for dependencies
+ENV VENV_PATH=/opt/venv
+RUN python -m venv $VENV_PATH
+ENV PATH="$VENV_PATH/bin:$PATH"
 
-# Set environment variable to prevent output buffering (logs are displayed in real-time)
-ENV PYTHONUNBUFFERED=1
+# Copy only necessary files first (for caching)
+COPY requirements.txt .
 
-# Install required dependencies
+# Install dependencies (avoids re-downloading)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose MLflow UI port (optional, only needed if running MLflow in the same container)
-EXPOSE 5000
+# Create necessary directories inside the container
+RUN mkdir -p /mlflow/logs /mlflow/best_models /app/com/model_mavericks
 
-# Run the MLFlow script inside the container
-CMD ["python", "./com/model_mavericks/ML_Flow.py", "--docker"]
+# Copy only necessary files (avoid copying large unwanted files)
+COPY com/model_mavericks/*.py  com/model_mavericks/
+COPY com/model_mavericks/*.json com/model_mavericks/
+COPY com/model_mavericks/*.properties com/model_mavericks/
+
+
+# Default command
+CMD ["python", "com/model_mavericks/ML_Flow.py", "--docker"]

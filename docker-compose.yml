@@ -3,19 +3,30 @@ version: '3.8'
 services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.5.0
-    container_name: mlflow-server
+    container_name: mlflow_server
     ports:
       - "5000:5000"
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     volumes:
-      - ./mlruns:/mlruns  # Mount mlruns folder for persistent MLflow logs
+      - ./mlflow/mlruns:/mlflow/mlruns  # Persistent storage for MLflow logs
+      - ./mlflow/mlartifacts:/mlflow/mlartifacts
 
   training:
-    build: .
-    container_name: model-training
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DOCKER_BUILDKIT: 1  # Enable BuildKit for improved caching
+    container_name: model_mavericks
     depends_on:
-      - mlflow  # Ensures MLflow starts first
+      - mlflow  # Ensure MLflow starts first
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - .:/app  # Mount the project folder to persist dependencies
+      - ./mlflow/logs:/mlflow/logs
+      - ./mlflow/best_models:/mlflow/best_models
+      - /root/.cache/pip:/root/.cache/pip  # Persistent pip cache to avoid re-downloading
+
     command: ["python", "com/model_mavericks/ML_Flow.py", "--docker"]
