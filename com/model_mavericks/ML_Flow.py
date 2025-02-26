@@ -19,6 +19,8 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import os
 import psutil
+from PropertiesConfig import PropertiesConfig as PC
+
 # Argument parser to determine where the script is running
 # send arg from command line to identify if the file is run from local or docker
 parser = argparse.ArgumentParser(description="Run MNIST Model Tuning with MLflow.")
@@ -54,6 +56,9 @@ class MNISTModelTuning:
         self.best_models = []
         self.ensemble_clf = None
         self.MLFLOW = mlflow
+        properties_config = PC()
+        self.properties = properties_config.get_properties_config()
+        self.best_model_path = self.properties['best_model_path']
 
     import numpy as np
 
@@ -252,7 +257,8 @@ class MNISTModelTuning:
 
     def save_best_models(self):
         """Saves the best models locally."""
-        save_dir = "best_models"
+
+        save_dir = f"{properties['best_model_path']}"
         os.makedirs(save_dir, exist_ok=True)
         logger.info(f"Saving Best Models")
         for model_name, model in self.best_models.items():
@@ -282,9 +288,6 @@ class MNISTModelTuning:
         self.save_best_models()
 
             #logger.info(f"10. Log best_model {self.best_model} in MLFLOW")
-
-
-
 
 #if __name__ == "__main__":
 #    mnist_tuning = MNISTModelTuning()
